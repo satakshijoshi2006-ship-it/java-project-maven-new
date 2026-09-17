@@ -2,29 +2,30 @@ name: Java CI/CD Pipeline to Tomcat
 
 on:
   push:
-    branches: [ main ]   # Trigger on push to main branch
+    branches:
+      - main
+
+  workflow_dispatch:
 
 jobs:
+
   build:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Checkout code
+
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Set up JDK
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      # 3. Build with Maven
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      # 4. Upload WAR as artifact (optional, for later jobs)
       - name: Upload WAR artifact
         uses: actions/upload-artifact@v4
         with:
@@ -37,8 +38,19 @@ jobs:
     environment: production
 
     steps:
-      # 5. Download WAR artifact
+
       - name: Download WAR artifact
         uses: actions/download-artifact@v4
         with:
           name: myapp
+
+      - name: Deploy to Tomcat
+        run: |
+          WAR_FILE=$(ls *.war)
+
+          curl -v --upload-file "$WAR_FILE" \
+          "http://${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }}@${{ secrets.TOMCAT_HOST }}/manager/text/deploy?path=/myapp&update=true"
+
+      - name: Verify deployment
+        run: |
+          curl -I http://${{ secrets.TOMCAT_HOST }}/myapp
