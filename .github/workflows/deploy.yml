@@ -22,6 +22,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: maven
 
       - name: Build with Maven
         run: mvn clean package -DskipTests
@@ -45,16 +46,40 @@ jobs:
         with:
           name: myapp
 
-      - name: Deploy to Tomcat
+      - name: Check WAR file
+        run: |
+          echo "Files downloaded:"
+          ls -lah
+
+          WAR_FILE=$(find . -name "*.war" | head -1)
+
+          if [ -z "$WAR_FILE" ]; then
+            echo "ERROR: WAR file not found"
+            exit 1
+          fi
+
+          echo "WAR file found: $WAR_FILE"
+
+      - name: Test Tomcat connection
+        env:
+          TOMCAT_HOST: ${{ secrets.TOMCAT_HOST }}
+        run: |
+          echo "Testing Tomcat at $TOMCAT_HOST"
+
+          curl -I --connect-timeout 10 \
+            "http://$TOMCAT_HOST"
+
+      - name: Deploy WAR to Tomcat
         env:
           TOMCAT_USER: ${{ secrets.TOMCAT_USER }}
           TOMCAT_PASSWORD: ${{ secrets.TOMCAT_PASSWORD }}
           TOMCAT_HOST: ${{ secrets.TOMCAT_HOST }}
         run: |
+
           WAR_FILE=$(find . -name "*.war" | head -1)
 
-          echo "WAR file: $WAR_FILE"
-          echo "Tomcat host: $TOMCAT_HOST"
+          echo "Deploying: $WAR_FILE"
+          echo "Tomcat: $TOMCAT_HOST"
 
           curl -v \
             -u "$TOMCAT_USER:$TOMCAT_PASSWORD" \
@@ -62,5 +87,14 @@ jobs:
             "http://$TOMCAT_HOST/manager/text/deploy?path=/myapp&update=true"
 
       - name: Verify deployment
+        env:
+          TOMCAT_HOST: ${{ secrets.TOMCAT_HOST }}
         run: |
-          curl -I "http://${{ secrets.TOMCAT_HOST }}/myapp"
+
+          echo "Checking application..."
+
+          curl -f -I \
+            --connect-timeout 10 \
+            "http://$TOMCAT_HOST/myapp"
+
+          echo "Deployment successful!"
